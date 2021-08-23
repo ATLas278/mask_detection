@@ -6,7 +6,7 @@ from tensorflow.keras.optimizers import Adam # stochastic gradient descent metho
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input # Preprocesses a tensor or Numpy array encoding a batch of images.
 from tensorflow.keras.preprocessing.image import img_to_array, load_img 
 from tensorflow.keras.utils import to_categorical # converts a class vector (integers) to a binary class matrix
-from sklearn.preprocessing import LabelBinarizer
+from sklearn.preprocessing import LabelBinarizer, MultiLabelBinarizer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 from imutils import paths
@@ -41,15 +41,15 @@ for category in CATEGORIES:
     # looping over image paths and prepocessing the images
     for img in os.listdir(path):
         img_path = os.path.join(path,img)
-        image = load_img(img_path,target_size=(224,224)) # resize all images, target size
+        image = load_img(img_path,target_size=(175,175)) # resize all images, target size
         image = img_to_array(image)
         image = preprocess_input(image)
         data.append(image)
         labels.append(category)
         
 # one-hot encoding on the labels (1 and 0) binary format
-lb = LabelBinarizer()
-labels = lb.fit_transform(labels)
+mlb = MultiLabelBinarizer()
+labels = mlb.fit_transform(labels)
 
 # convert data to arrays b/c hidden layers only accept this format
 data = np.array(data,dtype="float32")
@@ -57,3 +57,18 @@ labels = np.array(labels)
 
 # split the data
 X_train, y_train, X_test, y_test = train_test_split(data, labels, test_size=0.2, stratify=labels, random_state=42)
+
+# construct the training image generator for data augmentation
+# recreating the images
+
+aug = ImageDataGenerator(
+        rotation_range=20,
+        zoom_range=0.15,
+        width_shift_range=0.2,
+        height_shift_range=0.2,
+        shear_range=0.15,
+        horizontal_flip=True,
+        fill_mode="nearest")
+
+# load MobileNetV2 network, ensuring the head FC (Fully Connected) laery sets are left off
+baseModel = MobileNetV2(weights="imagenet", include_top=False, input_tensor=Input(shape=(175,175,3)))
