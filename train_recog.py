@@ -32,27 +32,26 @@ plt.rcParams['grid.color'] = 'lightgrey'
 init_lr = 1e-4
 epochs = 40
 bs = 32
-image_size = (192,192)
+image_size = (224,224)
 
 CATEGORIES = ["with_mask","without_mask","mask_weared_incorrect"]
 
 print("[INFO] loading images...")
 
 # MobileNetV2 CNN architecture model
-def build_model(num_classes, img_size=192):
+def build_model(num_classes, img_size=224):
     # load MobileNetV2 network, ensuring the head FC (Fully Connected) layer sets are left off
-    inputs = Input(shape=(192,192,3))    
-    baseModel = MobileNetV2(input_shape=(img_size,img_size,3),weights="imagenet",include_top=False, input_tensor=inputs)
+    inputs = Input(shape=(img_size,img_size,3))    
+    baseModel = MobileNetV2(input_shape=(img_size,img_size,3),weights="imagenet", include_top=False, input_tensor=inputs)
     
     
     # create the head of the model that will be placed on top of the base model
     headModel = baseModel.output
-    headModel = AveragePooling2D(pool_size=(6,6))(headModel)
+    headModel = AveragePooling2D(pool_size=(7,7))(headModel)
     headModel = Flatten(name="flatten")(headModel)
     headModel = Dense(128, activation="relu")(headModel)
     headModel = Dropout(0.5)(headModel)
-    headModel = Dense(64, activation="relu")(headModel)
-    headModel = Dropout(0.5)(headModel)
+    
     headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # place the head FC model on top of the base model (this will become the actual model we will train)
@@ -77,26 +76,26 @@ datagen = ImageDataGenerator(
         height_shift_range=0.2,
         shear_range=0.15,
         horizontal_flip=True,
-        fill_mode="nearest")
+        fill_mode="nearest",
+        validation_split=0.2)
     
-train = datagen.flow_from_directory('split_data/train', class_mode='categorical',target_size=(192,192), batch_size=bs)
-test = datagen.flow_from_directory('split_data/test',class_mode='categorical',target_size=(192,192), batch_size=bs)
-val = datagen.flow_from_directory('split_data/val',class_mode='categorical',target_size=(192,192), batch_size=bs)
 
-x_train, y_train = train.next()
-x_test,y_test = test.next()
-x_val, y_val = val.next()
+train = datagen.flow_from_directory('split_data/train', class_mode='categorical',target_size=image_size, batch_size=bs)
+test = datagen.flow_from_directory('split_data/test',class_mode='categorical',target_size=image_size, batch_size=bs)
+
+x_train, y_train = next(train)
+x_test,y_test = next(test)
 
 num_classes = len(CATEGORIES)
-
 model = build_model(num_classes)
 
 # train head of the network
 print("[INFO] training head...")
 H = model.fit(
         train,
-        steps_per_epoch=len(train) // bs,
-        validation_data=val,
+        steps_per_epoch=(len(train) // bs),
+        validation_data=(x_test,y_test),
+        validation_steps=len(x_test) // bs,
         batch_size=bs,
         epochs=epochs,
         callbacks=tf.keras.callbacks.EarlyStopping(monitor='val_loss',
@@ -104,8 +103,33 @@ H = model.fit(
                                                   patience=4,
                                                   restore_best_weights=True)
 )
+
 print("[INFO] evaluating network...")
-predIdxs = model.predict(test, batch_size=bs)
+predIdxs = model.predict(x_test, batch_size=bs)
 
 # for each img in the testing set, we need to find idx of label w/corresponding largest predicted probability
 predIdxs = np.argmax(predIdxs, axis=1)
+
+print(classification_report(np.argmax(y_test, axis=1), predIdxs, target_names=['Mask','No Mask','Mask Worn Incorrectly']))
+
+# serialize the model to disk
+print('[INFO] saving mask detector model...')
+model.save("mask_detector.model", save_format='h5')
+
+# plot the training loss
+plt.figure(figsize=(10,10))
+plt.plot(H.history['loss'], label='train_loss')
+plt.plot(H.history['val_loss'], label='val_loss')
+plt.title("Training Loss")
+plt.xlabel("Epoch #")
+plt.ylabel("Loss")
+plt.legend(loc='upper right')
+
+#plot the training accuracy
+plt.figure(figsize=(10,10))
+plt.plot(H.history['accuracy'], label='train_accuracy')
+plt.plot(H.history['val_accuracy'], label='val_accuracy')
+plt.title('Training Accuracy')
+plt.xlabel("Epoch #")
+plt.ylabel("Accuracy")
+plt.legend(loc='lower right')
