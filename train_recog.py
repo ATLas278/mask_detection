@@ -12,15 +12,15 @@ from tensorflow.keras import layers
 from tensorflow.keras.layers.experimental import preprocessing
 from sklearn.preprocessing import LabelBinarizer, MultiLabelBinarizer, OneHotEncoder
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
 
+import tensorflow as tf
 from imutils import paths
 import cv2
 import numpy as np
 import pandas as pd
 import os
-import splitfolders
-import tensorflow as tf
+import seaborn as sns
 import matplotlib.pyplot as plt
 %matplotlib inline
 plt.style.use('ggplot')
@@ -80,8 +80,8 @@ datagen = ImageDataGenerator(
         validation_split=0.2)
     
 
-train = datagen.flow_from_directory('split_data/train', class_mode='categorical',target_size=image_size, batch_size=bs)
-test = datagen.flow_from_directory('split_data/test',class_mode='categorical',target_size=image_size, batch_size=bs)
+train = datagen.flow_from_directory('split_data/train', class_mode='categorical',target_size=image_size, batch_size=bs,seed=42)
+test = datagen.flow_from_directory('split_data/test',class_mode='categorical',target_size=image_size, batch_size=bs,seed=42)
 
 x_train, y_train = next(train)
 x_test,y_test = next(test)
@@ -124,6 +124,7 @@ plt.title("Training Loss")
 plt.xlabel("Epoch #")
 plt.ylabel("Loss")
 plt.legend(loc='upper right')
+plt.savefig("images/train_loss.png")
 
 #plot the training accuracy
 plt.figure(figsize=(10,10))
@@ -133,3 +134,4 @@ plt.title('Training Accuracy')
 plt.xlabel("Epoch #")
 plt.ylabel("Accuracy")
 plt.legend(loc='lower right')
+plt.savefig("images/train_accuracy.png")
