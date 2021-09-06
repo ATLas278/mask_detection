@@ -22,7 +22,6 @@ import pandas as pd
 import os
 import seaborn as sns
 import matplotlib.pyplot as plt
-%matplotlib inline
 plt.style.use('ggplot')
 plt.rcParams.update({'font.size': 16})
 plt.rcParams['savefig.dpi'] = 200
@@ -30,11 +29,11 @@ plt.rcParams['axes.facecolor'] = 'white'
 plt.rcParams['grid.color'] = 'lightgrey'
 
 init_lr = 1e-4
-epochs = 40
+epochs = 200
 bs = 32
 image_size = (224,224)
 
-CATEGORIES = ["with_mask","without_mask","mask_weared_incorrect"]
+CATEGORIES = ["with_mask","without_mask"]
 
 print("[INFO] loading images...")
 
@@ -49,14 +48,14 @@ def build_model(num_classes, img_size=224):
     headModel = baseModel.output
     headModel = AveragePooling2D(pool_size=(7,7))(headModel)
     headModel = Flatten(name="flatten")(headModel)
-    headModel = Dense(128, activation="relu")(headModel)
+    headModel = Dense(64, activation="relu")(headModel)
     headModel = Dropout(0.5)(headModel)
-    
+​
     headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # place the head FC model on top of the base model (this will become the actual model we will train)
     model = Model(inputs=baseModel.input, outputs=headModel)
-
+​
     # lopp over all layers in the base model and freeze them so they will not be updated during the first training process
     for layer in baseModel.layers:
         layer.trainable=False
@@ -64,7 +63,7 @@ def build_model(num_classes, img_size=224):
     # compile model
     print("[INFO] compiling model...")
     opt = Adam(lr=init_lr,decay=init_lr / epochs)
-    model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=["accuracy"])
+    model.compile(loss="binary_crossentropy", optimizer=opt, metrics=["accuracy"])
     
     return model
 
@@ -80,8 +79,8 @@ datagen = ImageDataGenerator(
         validation_split=0.2)
     
 
-train = datagen.flow_from_directory('split_data/train', class_mode='categorical',target_size=image_size, batch_size=bs,seed=42)
-test = datagen.flow_from_directory('split_data/test',class_mode='categorical',target_size=image_size, batch_size=bs,seed=42)
+train = datagen.flow_from_directory('data',classes=['with_mask','without_mask'],target_size=image_size, batch_size=bs,seed=42,subset='training')
+test = datagen.flow_from_directory('data',classes=['with_mask','without_mask'],target_size=image_size, batch_size=bs,seed=42,subset='validation')
 
 x_train, y_train = next(train)
 x_test,y_test = next(test)
@@ -92,15 +91,16 @@ model = build_model(num_classes)
 # train head of the network
 print("[INFO] training head...")
 H = model.fit(
-        train,
-        steps_per_epoch=(len(train) // bs),
+        x_train,
+        y_train,
+        steps_per_epoch=(len(x_train) // bs),
         validation_data=(x_test,y_test),
         validation_steps=len(x_test) // bs,
         batch_size=bs,
         epochs=epochs,
         callbacks=tf.keras.callbacks.EarlyStopping(monitor='val_loss',
                                                   verbose=1,
-                                                  patience=4,
+                                                  patience=6,
                                                   restore_best_weights=True)
 )
 
@@ -110,11 +110,16 @@ predIdxs = model.predict(x_test, batch_size=bs)
 # for each img in the testing set, we need to find idx of label w/corresponding largest predicted probability
 predIdxs = np.argmax(predIdxs, axis=1)
 
-print(classification_report(np.argmax(y_test, axis=1), predIdxs, target_names=['Mask','No Mask','Mask Worn Incorrectly']))
+print(classification_report(np.argmax(y_test, axis=1), predIdxs, target_names=['Mask','No Mask'))
 
 # serialize the model to disk
 print('[INFO] saving mask detector model...')
 model.save("mask_detector.model", save_format='h5')
+
+# Confusion Matrix
+cf_matrix = confusion_matrix(np.argmax(y_test,axis=1), predIdxs)
+cm = sns.heatmap(cf_matrix/np.sum(cf_matrix), annot=True, cmap='Oranges', fmt= ' .2%');
+print(cm)
 
 # plot the training loss
 plt.figure(figsize=(10,10))

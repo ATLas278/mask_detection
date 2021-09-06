@@ -43,7 +43,7 @@ def detect_and_predict_mask(frame, faceNet, maskNet):
             # extract the face Region Of Interest, convert it from BGR to RGB channel ordering, resize it, and preprocess it
             face = frame[startY:endY, startX:endX]
             face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
-            face = cv2.resize(face, (192,192))
+            face = cv2.resize(face, (224,224))
             face = img_to_array(face)
             face = preprocess_input(face)
             
@@ -66,7 +66,7 @@ weightsPath = r"face_detector/res10_300x300_ssd_iter_140000.caffemodel"
 faceNet = cv2.dnn.readNet(prototxt_path,weightsPath)
 
 # load face mask detector model from disk
-maskNet = load_model("mask_detector.model")
+maskNet = load_model("detect_mask.model")
 
 # init the video stream
 print("[INFO] Starting video stream...")
@@ -85,7 +85,7 @@ while True:
     for (box, pred) in zip(locs, preds):
         # unpack the bounding box and predictions
         (startX, startY, endX, endY) = box
-        (mask, withoutMask, maskWornIncorrect) = pred
+        (mask, withoutMask) = pred
         
         # determine the class label and color we'll use to draw the bounding box and text
         label = "Mask" if mask > withoutMask else "No Mask"
