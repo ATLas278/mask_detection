@@ -50,12 +50,12 @@ def build_model(num_classes, img_size=224):
     headModel = Flatten(name="flatten")(headModel)
     headModel = Dense(64, activation="relu")(headModel)
     headModel = Dropout(0.5)(headModel)
-​
+    
     headModel = Dense(num_classes, activation="softmax")(headModel)
     
     # place the head FC model on top of the base model (this will become the actual model we will train)
     model = Model(inputs=baseModel.input, outputs=headModel)
-​
+
     # lopp over all layers in the base model and freeze them so they will not be updated during the first training process
     for layer in baseModel.layers:
         layer.trainable=False
@@ -110,7 +110,7 @@ predIdxs = model.predict(x_test, batch_size=bs)
 # for each img in the testing set, we need to find idx of label w/corresponding largest predicted probability
 predIdxs = np.argmax(predIdxs, axis=1)
 
-print(classification_report(np.argmax(y_test, axis=1), predIdxs, target_names=['Mask','No Mask'))
+print(classification_report(np.argmax(y_test, axis=1), predIdxs, target_names=['Mask','No Mask']))
 
 # serialize the model to disk
 print('[INFO] saving mask detector model...')
