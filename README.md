@@ -19,9 +19,11 @@
 * *Matplotlib*
 
 # **Motivations**
-The vaccines are rolling out, making the world a little bit safer than it was yesterday. A problem is that not everyone has gotten their vaccine, whether they have access to it or not. With hope of the world coming back to normal, it is time to be mor eproactive than ever before. <br>
+The vaccines are rolling out, making the world a little bit safer than it was yesterday. A problem is that not everyone has gotten their vaccine, whether they have access to it or not. With hope of the world coming back to normal, it is time to be more proactive than ever before. <br>
 
 Since social distancing and wearing a mask are the only monitored ways to avoid the infection until vaccinations become accessible for all, protocol detection is a big factor for us to gain insight in people's response to Covid-19.<br>
+
+I'll walk you through the steps of my face mask classifier where I label 2 categories, "with_mask" and "without_mask", followed by loading the classifier into my facial detector, to detect masks worn in real time.
 
 #### **Disclaimer and Practical Applications**
 > This model is absolutley not intended as an authoritarian approach to solving the pandemic, but provides more perspective on people's individual protocal during the pandemic through precise statistics pulled from real-time monitoring. Look at it as pulling sentiment analysis data from first-hand human interaction, instead of through a survey, social media platform, or engagement/rating system.<br>
@@ -29,6 +31,7 @@ Since social distancing and wearing a mask are the only monitored ways to avoid 
 
 # **Dataset**
 This is a balanced dataset of 5988 images belonging to two classes, "with_mask" and "without_mask"
+
 <img src="images/mask_no_mask.png" width="300" float= "right"/>
 
 # **Phase 1**
@@ -37,7 +40,7 @@ The first phase includes:<br>
 2. Training the face mask classifier with Keras/Tensorflow
 3. Serializing the face mask classifier to disk
 ## Preprocessing
-To preprocess my images, I performed **data augmentation** over my images using tensorflow's **ImagesDataGenerator** pipeline. This adds robustness and increases size of the dataset by manipulating multiple copies of a single image. It implements techniques such as rotating, horizontal flipping, zooming, and cropping. **ImageDataGenerator** generates batches of tensor image data with real-time augmentation.
+To preprocess the images, I performed **data augmentation** over the images using tensorflow's **ImagesDataGenerator** pipeline. This adds robustness and increases size of the dataset by manipulating multiple copies of a single image. It implements techniques such as rotating, horizontal flipping, zooming, and cropping. **ImageDataGenerator** generates batches of tensor image data with real-time augmentation.
 ```python
 datagen = ImageDataGenerator(
         rotation_range=20,
@@ -94,7 +97,7 @@ def build_model(num_classes, img_size=224):
 
 ## Classification Report
 <img src="images/classification_report.png"/>
-As shown above on our trained dataset, we have a macro average of 89% and a weighted average of 90%
+As shown above on our trained dataset, it has a macro average of 89% and a weighted average of 90%
 
 # **Phase 2**
 The second phase includes:<br>
@@ -107,10 +110,10 @@ The second phase includes:<br>
 ## What is Computer Vision?
 **Computer Vision** is an interdisciplinary scientific field developed to make computers acquire high-level understanding from digital videos & images.<br.
 
-In our case we'll be using Computer Vision to detect facial **Regions of Interest**, and merging it with our face mask classifier to detect masks in real time.
+In my case I used Computer Vision to detect facial **Regions of Interest**, and merged it with our face mask classifier to detect masks in real time.
 
 ## Loading Models
-Firstly, I loaded to pretrained caffe models specifically for image segmentation of the face. Then, I loaded my saved face mask classifier to forward propagate the input to a variable called the **maskNet**. I put the 2 transfered models into **OpenCV's Deep Neural Network** module to forward propagate the input through the **faceNet** model.
+Firstly, I loaded two pretrained caffe models specifically for image segmentation of the face. Then, I loaded my saved face mask classifier to forward propagate the input to a variable called the **maskNet**. I put the 2 transfered models into **OpenCV's Deep Neural Network** module to forward propagate the input through the **faceNet** model.
 
 ```python
 # load our serialized face detector model from disk
@@ -186,13 +189,13 @@ def detect_and_predict_mask(frame, faceNet, maskNet):
 ## What is VideoStream?
 **VideoStream** is a module in the Computer Vision library that allows us to stream a video, and capture each and every segment of a video.<br>
 
-After loading the models and building a **detect_and_predict** function, I then initialize the video stream.
+After I loaded the models and building a **detect_and_predict** function, I then initializedthe video stream.
 ```python
 vs = VideoStream(0).start()
 ```
-Then I loop through the frames from the video stream, and within the loop I call on the **detect_and_predict** function.<br>
+Then I looped through the frames from the video stream, and within the loop I called on the **detect_and_predict** function.<br>
 
-Lastly, for our bounding box, I determine the class labels and color, include the confidence in the label, and then display the bounding box on the output frames.
+Lastly, for our bounding box, I determined the class labels and color, included the confidence in the label, and then displayed the bounding box on the output frames.
 ```python
 vs = VideoStream(0).start()
 
