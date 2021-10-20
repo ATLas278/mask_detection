@@ -96,4 +96,140 @@ def build_model(num_classes, img_size=224):
 <img src="images/classification_report.png"/>
 As shown above on our trained dataset, we have a macro average of 89% and a weighted average of 90%
 
-# Phase 2
+# **Phase 2**
+The second phase includes:<br>
+1. Load face mask classifier from disk
+2. Detect faces in image/video stream using OpenCV
+3. Extract each face Region of Interest
+4. Apply face mask classifier to each face Region of Interest to determine "with_mask" or "without_mask"
+5. Show results
+
+## What is Computer Vision?
+**Computer Vision** is an interdisciplinary scientific field developed to make computers acquire high-level understanding from digital videos & images.<br.
+
+In our case we'll be using Computer Vision to detect facial **Regions of Interest**, and merging it with our face mask classifier to detect masks in real time.
+
+## Loading Models
+Firstly, I loaded to pretrained caffe models specifically for image segmentation of the face. Then, I loaded my saved face mask classifier to forward propagate the input to a variable called the **maskNet**. I put the 2 transfered models into **OpenCV's Deep Neural Network** module to forward propagate the input through the **faceNet** model.
+
+```python
+# load our serialized face detector model from disk
+prototxt_path = r"face_detector/deploy.prototxt"
+weightsPath = r"face_detector/res10_300x300_ssd_iter_140000.caffemodel"
+faceNet = cv2.dnn.readNet(prototxt_path,weightsPath)
+
+# load face mask detector model from disk
+maskNet = load_model("detect_mask.model")
+```
+Next I built a function where we input the frames of the video, the **faceNet** and **maskNet** as arguments.
+
+In the function we:<br>
+1) Grab dimensions of individual frames from our stream, construct a blob, and pass it through the network to obtain face detections.
+2) Extract the **confidence(probability)** associated with the detection, and filter out weak detections.
+3) Make sure that the bounding box falls within the dimensions of the frame.
+4) Extract the face **Region of Interest**, resize it, vectorize it, and preprocess it with Keras/Tensorflow.
+
+```python
+def detect_and_predict_mask(frame, faceNet, maskNet):
+    # grab dimensions of frame then construct a blob from it
+    (h, w) = frame.shape[:2]
+    blob = cv2.dnn.blobFromImage(frame,1.0, (192,192),
+                                (104.0,177.0,123.0))
+    
+    # pass the blob through the network and obtain the face detections
+    faceNet.setInput(blob)
+    detections = faceNet.forward()
+    print(detections.shape)
+    
+    # init list of faces and corresponding locations, and the list of predictions from our facemask network
+    
+    faces = []
+    locations = []
+    predictions = []
+    
+    # loop over the detections
+    for i in range(0, detections.shape[2]):
+        # extract the confidence(probability) associated with the detection
+        confidence = detections[0,0,i,2]
+        
+        # filter out weak detections by ensuring the confidence is greater than the minimum confidence
+        if confidence > 0.5:
+            # compute the (x, y)-coordinates of the bounding box for the object
+            box = detections[0,0,i,3:7] * np.array([w,h,w,h])
+            (startX, startY, endX, endY) = box.astype('int')
+            
+            # make sure the bounding boxes fall within the dimensions of the frame
+            (startX, startY) = (max(0, startX), max(0, startY))
+            (endX, endY) = (min(w-1, endX), min(h-1, endY))
+            
+            # extract the face Region Of Interest, convert it from BGR to RGB channel ordering, resize it, and preprocess it
+            face = frame[startY:endY, startX:endX]
+            face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
+            face = cv2.resize(face, (224,224))
+            face = img_to_array(face)
+            face = preprocess_input(face)
+            
+            # add the face and bounding boxes to their respective lists
+            faces.append(face)
+            locations.append((startX, startY, endX, endY))
+            
+    # only make the predictions if at least one face was detected
+    if len(faces) > 0:
+        # for faster inference we'll make batch predictions on all faces at the same time rather than one-by-one predictions in the obove for loop
+        faces = np.array(faces)
+        predictions = maskNet.predict(faces, batch_size=32)
+        
+    # return tuple of the face locations and their corresponding locations
+    return (locations, predictions)
+```
+
+## What is VideoStream?
+**VideoStream** is a module in the Computer Vision library that allows us to stream a video, and capture each and every segment of a video.<br>
+
+After loading the models and building a **detect_and_predict** function, I then initialize the video stream.
+```python
+vs = VideoStream(0).start()
+```
+Then I loop through the frames from the video stream, and within the loop I call on the **detect_and_predict** function.<br>
+
+Lastly, for our bounding box, I determine the class labels and color, include the confidence in the label, and then display the bounding box on the output frames.
+```python
+vs = VideoStream(0).start()
+
+# loop over the frames from the video stream
+while True:
+    # grab the frame from threaded video stream and resize it to have max width of 400 pixels
+    frame = vs.read()
+    frame = imutils.resize(frame, width=400)
+    
+    # detect faces in the frame and determ if they are wearing mask, not wearing, or worn incorrectly
+    (locs, preds) = detect_and_predict_mask(frame, faceNet, maskNet)
+    
+    # loop over detected fadce locations and their corresponding locations
+    for (box, pred) in zip(locs, preds):
+        # unpack the bounding box and predictions
+        (startX, startY, endX, endY) = box
+        (mask, withoutMask) = pred
+        
+        # determine the class label and color we'll use to draw the bounding box and text
+        label = "Mask" if mask > withoutMask else "No Mask"
+        color = (0, 255, 0) if label == "Mask" else (0, 0, 255)
+        
+        # incl probability in the label
+        label = "{}: {:.2f}%".format(label, max(mask, withoutMask) * 100)
+        
+        # display the label and bounding box rectangle on the output frame
+        cv2.putText(frame,label, (startX, startY-10), cv2.FONT_HERSHEY_SIMPLEX,0.45, color, 2)
+        cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
+```
+
+# **The Final Result**
+Here are the results when you run the application.
+
+![](images/mask.png) ![](images/No_mask.png)
+
+# **Future Work**
+1) Load more image data and continue to fine tune hyperparameters to increase my Macro and Weighted averages >95%.
+2) Add a third class "Mask Worn Incorrectly"
+3) Increase the range of detection, and have the model not mistaken any covering of the nose and mouth as a mask.
+4) Use this OpenCV model as a baseline for further Covid-19 monitoring, such as social distancing violation detetion, thermal scanning for temperature detection, to identify potential Covid patients.
